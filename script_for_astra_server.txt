@@ -1,0 +1,39 @@
+#!/bin/bash
+###################################################################
+#Name		:Islam
+#Version	:Linux 6.5.0-25-generic Ubunta 22.04 LTS
+#Email		:gashimov.islam@bk.ru
+#Program version: v1.1.1
+###################################################################
+
+
+sudo grep -i 'call trace' /var/log/kern.log
+sudo sosreport
+sudo apt install cpufrequtils
+sudo apt install stress-ng
+sudo apt install ipmitool
+
+#ipmitool -R 1 -I lanplus -U admin -P 12345 -H 10.15.ХХ.ХХ power status
+#fly-admin-intcheck
+#sudo ping -s 1400 -i 0.1 192.168.0.2
+#./run_stress_test 
+
+sudo update-pciids
+sudo lshw -html -sanitize -numeric > /home/u/lswh_info.html
+lspci -k | grep -i -EA2 net
+aplay -l > /home/u/audio_info.txt
+lspci -v | grep -i VGA > /home/u/vga_adapter.txt
+lspci -k | grep -EA2 'VGA|3D' > /home/u/vga_driver.txt
+xrandr > /home/u/xrandr_info.txt
+glxinfo | grep -i Accelerated
+glxinfo | grep OpenGL
+glxgears -info > /home/u/glxgears_info.txt
+glxinfo | grep -i renderer > /home/u/info_renderer.txt
+glxinfo -B > /home/u/glxinfo.txt
+aplay -l > /home/u/audio_info.txt
+cat /proc/cpuinfo > /home/u/base_cpu.txt
+lscpu > /home/u/info_lscpu.txt
+cpufreq-info > /home/u/info_cpufreq.txt
+
+sudo 7z b -mm=* > 7z.txt
+script -c 'stress-ng -c 0 -m 0 -d 0 -i 0 -C 0 -B 0 -t 1h --tz --metrics-brief -v' > /home/u/stressng.txt
