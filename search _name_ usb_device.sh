@@ -2,7 +2,7 @@
 ###################################################################
 #Name		:Islam
 #Version	:Linux 6.5.0-26-generic Ubunta 22.04 LTS
-#Description	:search for the name of the USB device in the system
+#Description	:Search for the name of the USB device in the system
 #Email		:gashimov.islam@bk.ru
 ###################################################################
 
