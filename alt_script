@@ -1,0 +1,190 @@
+#!/bin/bash
+###################################################################
+#Name		:Islam
+#Version OS	:Alt Linux 6.1.79-un-def-alt1 x86_64
+#Description	:Testing and collecting information about Alt Linux OS
+#Device use	:server A216-8N
+#Email		:gashimov.islam@bk.ru
+#Program version: v1.0
+###################################################################
+
+
+while [[ $# > 1 ]]; do
+	shift
+done
+
+
+uninformative_kernel_messages() {
+	[[ $(dmesg | grep -c "AER: Multiple Corrected error received") > 9 ]] && { 
+		echo "Kernel messages: AER Multiple Corrected error received" ;
+		echo "Edit parametr kernel ---> /etc/sysconfig/grub2" ;
+		echo "pcie_aspm=off — отключение энергосбережения PCIE" ;
+		echo  "pci=nomsi — отключение использования прерываний MSI" ;
+		echo  "pci=noaer — отключение расширенного отчёта об ошибках PCIE" ;	
+		echo "After use the utilities:
+			update-grub
+			systemctl stop systemd-journald
+			rm -rf /var/log/journal/* 
+			reboot -f" ;
+	return ;
+	}
+
+	echo "AER $count < 9 -------> [ OK ]"
+}
+
+updating_os_latest_version() {
+	case $1 in
+	updkern )
+		apt-get update
+		apt-get dist-upgrade
+		update-kernel
+		reboot
+		;;
+	remkern )
+		remove-old-kernel
+		apt-get autoremove
+		apt-get clean
+		;;
+	wiki )
+		echo "updkern - update and full upgrade system after reboot"
+		echo "remkern - remove old kernel, remove old *.conf/libs"
+		;;
+esac
+}
+
+get_sys_logs() {
+	echo "Буфер сообщений ядра:"
+	dmesg -H -P --color=always | gzip > dmesg.gz
+	dmesg | grep -iE '(panic|fatal|fail|error|warning)' | gzip > dmesg_err.gz
+
+	echo "Ошибки системных служб:"
+	systemctl --failed | gzip > systemctl_err.gz
+	
+	echo "Системный журнал:"
+	journalctl -b | gzip > journal.gz
+	journalctl -p err -b | gzip > journal_err.gz
+	echo "Просмотр журналов в консоли:"
+	gunzip <dmesg.gz | less -r
+}
+
+sys_and_hwinfo() {
+	apt-get update
+	apt-get install inxi rfkill sos system-report acpica dmidecode smartmontools lsscsi
+	
+	echo "Начат процесс сбора информации о системе:"
+	inxi -v8 -c2 > inxi.txt
+	echo "Нажмите ENTER три раза, чтобы продолжить:"
+	mv $(sosreport | grep -i "/var/tmp/sosreport*") /root
+	system-report
+	acpidump > acpi.dat
+	lspci -nnk > lspci.txt
+	dmidecode > dmidecode.txt
+	lsusb > lsusb.txt
+	lsusb -t > lsusb_hierarchy.txt
+	lscpu > lscpu.txt
+	lsblk -ft > lsblk.txt
+	lsscsi -v > lsscsi.txt
+	for namedisk in $(ls /dev/* | grep -i -P [sd]{2}[a-z]);
+	do 
+		#inxi -D | grep -i /sd*
+		[[ ${#namedisk} = 8 ]] && smartctl -a $namedisk > smartctl_sd${namedisk:7:1}.txt
+	done
+	rfkill --output-all > rfkill.txt
+	uname -a > title.protocol
+	
+	unset -v "namedisk"
+}
+
+comparison_of_configuration_with_specification() {
+	echo "Сравнение конфигурации со спецификацией оборудования:"
+	sleep 5
+	echo "Проверка CPU и материнской платы"
+	inxi -CM | less
+	
+	echo "Проверка оперативной памяти"
+	inxi -m | less
+	
+	echo "Проверка дисковой подсистемы"
+	inxi -D | less
+	
+	echo "Проверка подсистемы вывода изображения"
+	inxi -G | less
+	
+	echo "Проверка наличия 3D-ускорения"
+	glxinfo | grep 'direct rendering' | less
+	
+	echo "Проверка возможности привода CD/DVD при наличии"
+	cat /proc/sys/dev/cdrom/info 2>/dev/null | less
+	
+	read -p "Хотели бы вы повторить предыдущие шаги, y/n? " response	
+	[[ $response = "y" || $response = "yes" || $response == "YES" ]] && comparison_of_configuration_with_specification
+	
+	unset -v "response"
+}
+
+stress_test() { 
+	apt-get install stress-ng cpupower
+	
+	echo "Текущие частоты ядер CPU"
+	cpupower monitor
+	
+	echo "Кол-во ядер CPU"
+	grep -c -E "^processor\s" /proc/cpuinfo
+	
+	
+	echo "Стресс тест CPU на 60с. Откройте новый терминал и запустите команду ---> cpupower monitor"
+	for count_time in {15..1}; do sleep 1; echo "Начало стресс теста CPU через $count_time сек"; done
+	stress-ng --cpu 0 --cpu-method matrixprod --metrics --timeout 60s
+	echo "Done!"
+}
+
+network_subsystem_check() {
+	echo "В терминале посмотрите полученный IP-адрес:" ; 
+	ip a
+	read -p "Проверить работу сети y/n? " response
+	[[ $response = "y" || $response = "yes" ]] && ping -c 3 www.ya.ru | grep -P "packet loss"
+	
+	unset -v "response"
+}
+
+check_perform_net_interfac(){
+	apt-get install iperf3
+	echo "Проверка производительности сетевых интерфейсов"
+	echo "На одном узле запустите утилиту iperf3 в режиме сервера: iperf3 -s"
+	read -p "Сервер запущен y/n ? " response
+	[[ $response = "y" || $response = "yes" ]] && {
+	read -p "Введите IP адресс сервера: " server_ip
+	iperf3 -i 5 -t 60 -c $server_ip
+	}
+
+	unset -v "response" "server_ip"
+}
+
+####################
+#check_numa(){
+#	echo "Проверка NUMA:"
+#	apt-get install numactl squashfs-tools htop
+#	
+#}
+#
+#check_ipmi(){
+#	apt-get install ipmitool
+#	{ modprobe ipmi_msghandler ; modprobe ipmi_devintf ; modprobe ipmi_si}
+#	
+#	echo "Проверьте состояние питания оборудования:"
+#	
+#}
+#
+#check_eSATA() {
+#	
+#}
+#####################
+
+updating_os_latest_version $1
+uninformative_kernel_messages
+get_sys_logs
+sys_and_hwinfo
+comparison_of_configuration_with_specification
+stress_test
+network_subsystem_check
+check_perform_net_interfac
